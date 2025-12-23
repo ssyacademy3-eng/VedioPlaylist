@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YouTube Playlist UI Full Width Taller</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<style>
+:root {
+  --primary: linear-gradient(135deg,#0a0057,#3f00ee);
+  --playlist-bg: #FFD700; /* sunny yellow */
+  --active-title: #0a0057; /* royal blue */
+  --progress: #3f00ee; /* progress bar color */
+}
+
+*{margin:0;padding:0;box-sizing:border-box;}
+body{width:100%;font-family:'Poppins',sans-serif;background:var(--primary);color:#000;overflow-x:hidden;}
+main.container{display:flex;flex-direction:row;gap:1rem;padding:1rem;max-width:1400px;margin:0 auto;}
+section{border-radius:10px;padding:1rem;flex:1;min-width:0;}
+.main-video{flex:2;display:flex;flex-direction:column;align-items:center;width:100%;}
+.video-frame{position:relative;width:100%;height:650px;border-radius:10px;overflow:hidden;} /* Increased height */
+.video-frame iframe{width:100%;height:100%;}
+.video-title{
+  margin:0.5rem 0;
+  text-align:center;
+  font-size:1.3rem;
+  font-weight:bold;
+  color:#fff;
+}
+.video-controls{display:flex;justify-content:center;gap:1rem;margin:0.5rem 0;}
+.video-controls button{background: var(--playlist-bg);border:none;color:#000;font-size:1.2rem;padding:0.6rem 1.2rem;border-radius:8px;cursor:pointer;font-weight:bold;transition:0.3s;}
+.video-controls button:hover{background:#ffea00;}
+.progress-overlay{position:relative;width:100%;height:10px;background:rgba(0,0,0,0.2);border-radius:10px;margin-bottom:0.5rem;cursor:pointer;}
+.progress-bar{width:0%;height:100%;background:var(--progress);border-radius:10px;box-shadow:0 0 10px var(--progress);}
+.video-playlist{flex:1;display:flex;flex-direction:column;background:var(--playlist-bg);border-radius:10px;padding:0.5rem;margin-top:0.5rem;}
+.video-playlist .title{font-size:1.1rem;color:#000;margin-bottom:0.3rem;}
+.video-playlist>p{color:#000;font-size:0.9rem;margin-bottom:0.7rem;}
+.videos{overflow-y:auto;flex:1;max-height:70vh;display:flex;flex-direction:column;gap:0.2rem;}
+.video-item{display:flex;align-items:center;gap:0.6rem;padding:0.6rem;border-radius:8px;transition:0.3s;cursor:pointer;background:#fff;color:#000;}
+.video-item:hover{background:#ffe066;}
+.video-item.active{background:#ffec99;color:var(--active-title);}
+.video-item.active h3{color:var(--active-title);}
+.video-item i{font-size:18px;width:24px;text-align:center;color:#000;}
+.video-item.active i{color:var(--active-title);}
+.video-item h3{font-size:0.9rem;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.video-item .time{font-size:0.85rem;opacity:0.8;flex-shrink:0;}
+.videos::-webkit-scrollbar{width:4px;}
+.videos::-webkit-scrollbar-thumb{background:#000;border-radius:4px;}
+
+/* Responsive */
+@media(max-width:900px){
+  main.container{flex-direction:column;padding:0.5rem;}
+  .main-video{width:100%;}
+  .video-frame{width:100vw; height:55vh;} /* Full width, taller height for mobile */
+  .video-playlist{width:100%;margin-top:0.5rem;}
+  .videos{max-height:35vh;}
+}
+@media(max-width:600px){
+  .video-frame{height:50vh;}
+  .video-title{font-size:1.2rem;}
+  .video-item h3{font-size:0.85rem;}
+  .video-item i{font-size:16px;}
+}
+@media(max-width:400px){
+  .video-frame{height:45vh;}
+  .video-playlist>p{font-size:0.8rem;}
+  .video-item h3{font-size:0.8rem;}
+  .video-item .time{font-size:0.75rem;}
+}
+</style>
+</head>
+<body>
+
+<main class="container">
+  <section class="main-video">
+    <div class="video-frame" id="videoFrameContainer">
+      <div id="player"></div>
+    </div>
+
+    <div class="video-controls">
+      <button id="prev">Prev</button>
+      <button id="next">Next</button>
+    </div>
+    <div class="progress-overlay"><div class="progress-bar"></div></div>
+    <h3 class="video-title" id="mainTitle">Video Title</h3>
+  </section>
+
+  <section class="video-playlist">
+    <h3 class="title">Lessons</h3>
+    <p>17 Lessons 8h-43min</p>
+    <div class="videos" id="playlistContainer"></div>
+  </section>
+</main>
+
+<script src="https://www.youtube.com/iframe_api"></script>
+<script>
+const playlist=[
+
+{id:'6-zV1kbTK1U',title:'Greeting & Say your name',duration:'47:41'},
+
+{id:'mbUz75Mb9Dc',title:'Alphabets1',duration:'47:41'},
+
+{id:'dXvEAhlaAZQ',title:'Subject Pronouns & Alphabets',duration:'1:07:04'},
+
+{id:'l6bb3lFohu4',title:'Subject Pronouns 2',duration:'35:54'},
+
+{id:'xcUplRJWuFM',title:'Hello Song & Spell name ',duration:'1:25:16'},
+
+{id:'UcJwXy_ogqs',title:'Goodbye Song ',duration:'1:12:47'},
+  
+{id:'p_Bxs7aN1UU',title:'Alphabets 2 ',duration:'1:12:47'},
+
+{id:'ZmKkA5JNf-E',title:'Homework 1',duration:'1:15:01'},
+
+{id:'Y3v6sIPk6-E',title:'Alphbets 3 ',duration:'54:29'},
+
+{id:'gsF3o4W4INc',title:'Review',duration:'32:36'},
+
+{id:'tmnO1Cwenag',title:' Demonstrative Pronouns This-That',duration:'47:08'},
+
+{id:'_fopzEjH9WYo',title:'Possessive Adjective',duration:'47:46'},
+
+{id:'_4gW2EVRaLc',title:'Family Members',duration:'47:46'},
+
+{id:'qsKl_S_1Tcw',title:'Cluster OU -OO  ',duration:'47:46'},
+ 
+{id:'O1W57JJVXnY',title:'Homework 2 ',duration:'59:00'},
+  
+{id:'qfkgtDomrV4',title:'Blending ',duration:'59:00'},
+
+  ];
+
+
+
+const playlistContainer=document.getElementById('playlistContainer');
+const mainTitle=document.getElementById('mainTitle');
+const progressBar=document.querySelector('.progress-bar');
+const nextBtn=document.getElementById('next');
+const prevBtn=document.getElementById('prev');
+
+playlistContainer.innerHTML=playlist.map((v,i)=>`
+  <div class="video-item" data-index="${i}">
+    <i class="fa-solid fa-play"></i>
+    <p>${String(i+1).padStart(2,'0')}.</p>
+    <h3>${v.title}</h3>
+    <p class="time">${v.duration}</p>
+  </div>
+`).join('');
+
+let videoItems=document.querySelectorAll('.video-item');
+
+// --- FIX: Validate last index in localStorage ---
+let savedIndex = parseInt(localStorage.getItem('lastVideoIndex')) || 0;
+if(savedIndex >= playlist.length) savedIndex = 0; // reset if out of range
+let currentIndex = savedIndex;
+let lastTime = parseFloat(localStorage.getItem('lastVideoTime')) || 0;
+
+let player;
+function onYouTubeIframeAPIReady(){
+  player=new YT.Player('player',{
+    height:'100%',
+    width:'100%',
+    videoId:playlist[currentIndex].id,
+    playerVars:{autoplay:1,controls:1,modestbranding:1,rel:0,fs:1,iv_load_policy:3},
+    events:{
+      'onReady':()=>{player.seekTo(lastTime,true); highlightVideo(currentIndex); player.playVideo();},
+      'onStateChange':onStateChange
+    }
+  });
+}
+
+function highlightVideo(index){
+  videoItems.forEach(v=>{
+    v.classList.remove('active');
+    v.querySelector('i').classList.replace('fa-pause','fa-play');
+    v.querySelector('h3').style.color="#000";
+  });
+  videoItems[index].classList.add('active');
+  videoItems[index].querySelector('i').classList.replace('fa-play','fa-pause');
+  videoItems[index].querySelector('h3').style.color="var(--active-title)";
+  mainTitle.textContent=playlist[index].title;
+}
+
+function playVideo(index){
+  currentIndex=index;
+  player.loadVideoById(playlist[index].id);
+  highlightVideo(index);
+}
+
+videoItems.forEach((v,i)=>v.addEventListener('click',()=>playVideo(i)));
+nextBtn.addEventListener('click',()=>{currentIndex=(currentIndex+1)%playlist.length;playVideo(currentIndex);});
+prevBtn.addEventListener('click',()=>{currentIndex=(currentIndex-1+playlist.length)%playlist.length;playVideo(currentIndex);});
+
+// Save progress and update progress bar
+setInterval(()=>{
+  if(player && player.getCurrentTime){
+    const time=player.getCurrentTime();
+    const duration=player.getDuration();
+    progressBar.style.width=((time/duration)*100)+'%';
+    localStorage.setItem('lastVideoIndex',currentIndex);
+    localStorage.setItem('lastVideoTime',time);
+  }
+},500);
+
+function onStateChange(event){
+  if(event.data===YT.PlayerState.ENDED){
+    currentIndex=(currentIndex+1)%playlist.length;
+    playVideo(currentIndex);
+  }
+}
+</script>
+</body>
+</html>
