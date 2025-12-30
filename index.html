@@ -18,7 +18,7 @@ body{width:100%;font-family:'Poppins',sans-serif;background:var(--primary);color
 main.container{display:flex;flex-direction:row;gap:1rem;padding:1rem;max-width:1400px;margin:0 auto;}
 section{border-radius:10px;padding:1rem;flex:1;min-width:0;}
 .main-video{flex:2;display:flex;flex-direction:column;align-items:center;width:100%;}
-.video-frame{position:relative;width:100%;height:650px;border-radius:10px;overflow:hidden;} /* Increased height */
+.video-frame{position:relative;width:100%;height:650px;border-radius:10px;overflow:hidden;} 
 .video-frame iframe{width:100%;height:100%;}
 .video-title{
   margin:0.5rem 0;
@@ -51,7 +51,7 @@ section{border-radius:10px;padding:1rem;flex:1;min-width:0;}
 @media(max-width:900px){
   main.container{flex-direction:column;padding:0.5rem;}
   .main-video{width:100%;}
-  .video-frame{width:100vw; height:55vh;} /* Full width, taller height for mobile */
+  .video-frame{width:100vw; height:55vh;} 
   .video-playlist{width:100%;margin-top:0.5rem;}
   .videos{max-height:35vh;}
 }
@@ -87,17 +87,28 @@ section{border-radius:10px;padding:1rem;flex:1;min-width:0;}
 
   <section class="video-playlist">
     <h3 class="title">Lessons</h3>
-    <p>17 Lessons 8h-43min</p>
+    <p id="statsDisplay">Loading...</p>
     <div class="videos" id="playlistContainer"></div>
   </section>
 </main>
 
 <script src="https://www.youtube.com/iframe_api"></script>
 <script>
-// --- CONFIGURATION: PASTE YOUR CSV LINK HERE ---
-const sheetUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSsZgbYPEF4KHqPPUbpPEVjaw21doCq-Xz4v_l9yt0EBy2m7yAYucygnUzZCp4fhkCN-o_AjmkHTewT/pub?output=csv';
+// --- CONFIGURATION: EDIT THIS SECTION ---
 
-let playlist = []; // Empty initially, filled by sheet
+// 1. Enter the Sheet ID (Found in URL: /d/YOUR_SHEET_ID/edit)
+const sheetID = '1WjQgGPmH9H77ZCjQOT6CTDCw4wxnwu7OgMYNF04RVz8'; 
+
+// 2. Enter the GID for the specific tab (Found in URL: gid=YOUR_GID)
+//    0 is usually the first tab. A specific tab will be a long number.
+const sheetGID = '0'; 
+
+// Automatic URL Constructor
+const sheetUrl = `https://docs.google.com/spreadsheets/d/${sheetID}/pub?gid=${sheetGID}&output=csv`;
+
+// ----------------------------------------
+
+let playlist = []; 
 let currentIndex = 0;
 let lastTime = 0;
 let player;
@@ -106,55 +117,76 @@ let videoItems = [];
 const playlistContainer = document.getElementById('playlistContainer');
 const mainTitle = document.getElementById('mainTitle');
 const progressBar = document.querySelector('.progress-bar');
+const statsDisplay = document.getElementById('statsDisplay');
 const nextBtn = document.getElementById('next');
 const prevBtn = document.getElementById('prev');
 
-// 1. Initialize App: Fetch Data first
+// 1. Initialize App
 async function initApp() {
   try {
     const response = await fetch(sheetUrl);
+    
+    if (!response.ok) {
+        throw new Error("Network response was not ok. Check if Sheet is Published to Web.");
+    }
+    
     const data = await response.text();
     playlist = parseCSV(data);
     
     if (playlist.length > 0) {
-      // Data loaded, now set up the UI
       setupUI();
-      // If YouTube API is already ready, load the player now
       if (window.YT && window.YT.Player) {
         createPlayer();
       }
     } else {
-      mainTitle.textContent = "No videos found in sheet.";
+      mainTitle.textContent = "No videos found or Sheet is private.";
     }
   } catch (error) {
     console.error("Error fetching sheet:", error);
     mainTitle.textContent = "Error loading playlist.";
+    statsDisplay.textContent = "Connection Failed";
   }
 }
 
-// 2. CSV Parser Helper
+// 2. CSV Parser
 function parseCSV(csvText) {
   const lines = csvText.split('\n');
   const result = [];
-  // Start at i=1 to skip the header row (id, title, duration)
+  
+  // Start at i=1 to skip header
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) continue;
-    const parts = line.split(',');
-    if (parts.length >= 3) {
-      const id = parts[0].trim();
-      const duration = parts[parts.length - 1].trim();
-      // Combine middle parts in case title has commas
-      const title = parts.slice(1, parts.length - 1).join(',').replace(/^"|"$/g, '').trim();
+    
+    // Simple regex to handle commas inside quotes
+    // If your titles have no commas, line.split(',') is faster
+    // This splits by comma BUT ignores commas inside "quotes"
+    const parts = line.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || line.split(',');
+
+    // Clean up quotes from regex match
+    const cleanParts = parts.map(p => p.replace(/^"|"$/g, '').trim());
+
+    if (cleanParts.length >= 3) {
+      // Assuming Order: ID, Title, Duration (Customize index if needed)
+      // If your CSV is: ID, Title, Description, Duration
+      // ID = 0, Title = 1, Duration = 3 (last)
+      
+      const id = cleanParts[0]; 
+      // If title was split incorrectly due to complexity, fallback to simple logic
+      const title = cleanParts[1]; 
+      const duration = cleanParts[cleanParts.length - 1]; 
+      
       result.push({ id, title, duration });
     }
   }
   return result;
 }
 
-// 3. Render and Setup Logic
+// 3. Render and Setup
 function setupUI() {
-  // Generate HTML (Your exact template)
+  // Update Stats Text
+  statsDisplay.textContent = `${playlist.length} Lessons`;
+
   playlistContainer.innerHTML = playlist.map((v, i) => `
     <div class="video-item" data-index="${i}">
       <i class="fa-solid fa-play"></i>
@@ -164,7 +196,6 @@ function setupUI() {
     </div>
   `).join('');
 
-  // Re-select items after creating them
   videoItems = document.querySelectorAll('.video-item');
 
   // Load Saved State
@@ -173,20 +204,18 @@ function setupUI() {
   currentIndex = savedIndex;
   lastTime = parseFloat(localStorage.getItem('lastVideoTime')) || 0;
 
-  // Add Click Listeners
   videoItems.forEach((v, i) => v.addEventListener('click', () => playVideo(i)));
 }
 
-// 4. YouTube Player Setup
+// 4. YouTube Player
 function onYouTubeIframeAPIReady() {
-  // This might fire before OR after fetch is done.
   if (playlist.length > 0) {
     createPlayer();
   }
 }
 
 function createPlayer() {
-  if(player) return; // Prevent duplicate players
+  if(player) return;
   
   player = new YT.Player('player', {
     height: '100%',
@@ -197,6 +226,7 @@ function createPlayer() {
       'onReady': () => {
         player.seekTo(lastTime, true);
         highlightVideo(currentIndex);
+        // Browser policy might block auto-play with sound
         player.playVideo();
       },
       'onStateChange': onStateChange
@@ -219,7 +249,6 @@ function highlightVideo(index) {
     videoItems[index].querySelector('h3').style.color = "var(--active-title)";
     mainTitle.textContent = playlist[index].title;
     
-    // Auto-scroll to active item
     videoItems[index].scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 }
@@ -263,7 +292,6 @@ function onStateChange(event) {
   }
 }
 
-// Start the App
 initApp();
 </script>
 </body>
