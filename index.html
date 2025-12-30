@@ -8,9 +8,9 @@
 <style>
 :root {
   --primary: linear-gradient(135deg,#0a0057,#3f00ee);
-  --playlist-bg: #FFD700; /* sunny yellow */
-  --active-title: #0a0057; /* royal blue */
-  --progress: #3f00ee; /* progress bar color */
+  --playlist-bg: #FFD700;
+  --active-title: #0a0057;
+  --progress: #3f00ee;
 }
 
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -20,13 +20,7 @@ section{border-radius:10px;padding:1rem;flex:1;min-width:0;}
 .main-video{flex:2;display:flex;flex-direction:column;align-items:center;width:100%;}
 .video-frame{position:relative;width:100%;height:650px;border-radius:10px;overflow:hidden;} 
 .video-frame iframe{width:100%;height:100%;}
-.video-title{
-  margin:0.5rem 0;
-  text-align:center;
-  font-size:1.3rem;
-  font-weight:bold;
-  color:#fff;
-}
+.video-title{margin:0.5rem 0;text-align:center;font-size:1.3rem;font-weight:bold;color:#fff;}
 .video-controls{display:flex;justify-content:center;gap:1rem;margin:0.5rem 0;}
 .video-controls button{background: var(--playlist-bg);border:none;color:#000;font-size:1.2rem;padding:0.6rem 1.2rem;border-radius:8px;cursor:pointer;font-weight:bold;transition:0.3s;}
 .video-controls button:hover{background:#ffea00;}
@@ -47,11 +41,25 @@ section{border-radius:10px;padding:1rem;flex:1;min-width:0;}
 .videos::-webkit-scrollbar{width:4px;}
 .videos::-webkit-scrollbar-thumb{background:#000;border-radius:4px;}
 
+/* ERROR BOX STYLE */
+#errorBox {
+  display:none; 
+  background: #ffcccc; 
+  color: #cc0000; 
+  padding: 10px; 
+  border-radius: 5px; 
+  margin: 10px auto; 
+  max-width: 800px;
+  text-align: center;
+  font-weight: bold;
+  border: 2px solid #cc0000;
+}
+
 /* Responsive */
 @media(max-width:900px){
   main.container{flex-direction:column;padding:0.5rem;}
   .main-video{width:100%;}
-  .video-frame{width:100vw; height:55vh;} 
+  .video-frame{width:100vw; height:55vh;}
   .video-playlist{width:100%;margin-top:0.5rem;}
   .videos{max-height:35vh;}
 }
@@ -71,6 +79,8 @@ section{border-radius:10px;padding:1rem;flex:1;min-width:0;}
 </head>
 <body>
 
+<div id="errorBox"></div>
+
 <main class="container">
   <section class="main-video">
     <div class="video-frame" id="videoFrameContainer">
@@ -87,26 +97,27 @@ section{border-radius:10px;padding:1rem;flex:1;min-width:0;}
 
   <section class="video-playlist">
     <h3 class="title">Lessons</h3>
-    <p id="statsDisplay">Loading...</p>
+    <p id="statsMsg">Loading...</p>
     <div class="videos" id="playlistContainer"></div>
   </section>
 </main>
 
 <script src="https://www.youtube.com/iframe_api"></script>
 <script>
-// --- CONFIGURATION: EDIT THIS SECTION ---
+// ==========================================
+// CONFIGURATION (EDIT HERE)
+// ==========================================
 
-// 1. Enter the Sheet ID (Found in URL: /d/YOUR_SHEET_ID/edit)
+// 1. SHEET ID (Find in URL: /d/XXXXXX/edit)
 const sheetID = '1WjQgGPmH9H77ZCjQOT6CTDCw4wxnwu7OgMYNF04RVz8'; 
 
-// 2. Enter the GID for the specific tab (Found in URL: gid=YOUR_GID)
-//    0 is usually the first tab. A specific tab will be a long number.
+// 2. TAB ID / GID (Find in URL: gid=0 or gid=123456)
 const sheetGID = '0'; 
 
-// Automatic URL Constructor
-const sheetUrl = `https://docs.google.com/spreadsheets/d/${sheetID}/pub?gid=${sheetGID}&output=csv`;
+// 3. Construct URL (Do not change this)
+const sheetUrl = `https://docs.google.com/spreadsheets/d/${sheetID}/gviz/tq?tqx=out:csv&gid=${sheetGID}`;
 
-// ----------------------------------------
+// ==========================================
 
 let playlist = []; 
 let currentIndex = 0;
@@ -117,76 +128,98 @@ let videoItems = [];
 const playlistContainer = document.getElementById('playlistContainer');
 const mainTitle = document.getElementById('mainTitle');
 const progressBar = document.querySelector('.progress-bar');
-const statsDisplay = document.getElementById('statsDisplay');
 const nextBtn = document.getElementById('next');
 const prevBtn = document.getElementById('prev');
+const statsMsg = document.getElementById('statsMsg');
+const errorBox = document.getElementById('errorBox');
 
 // 1. Initialize App
+initApp();
+
 async function initApp() {
   try {
     const response = await fetch(sheetUrl);
-    
-    if (!response.ok) {
-        throw new Error("Network response was not ok. Check if Sheet is Published to Web.");
-    }
-    
     const data = await response.text();
+    
+    // --- DEBUGGING CHECKS ---
+    
+    // Check 1: Did we get an HTML login page? (Means Private Sheet)
+    if(data.trim().startsWith("<!DOCTYPE") || data.includes("<html")) {
+        showError("PERMISSION ERROR: The Sheet is private. Go to Share > Anyone with the link.");
+        return;
+    }
+
+    // Check 2: Did we get a JSON error? (Means Wrong ID/GID)
+    if(data.includes("reqId") && data.includes("status")) {
+         showError("ID ERROR: Google cannot find this Sheet ID or GID. Check your URL.");
+         return;
+    }
+
+    // --- PARSING ---
     playlist = parseCSV(data);
     
     if (playlist.length > 0) {
+      statsMsg.textContent = `${playlist.length} Lessons`;
       setupUI();
-      if (window.YT && window.YT.Player) {
-        createPlayer();
-      }
+      if (window.YT && window.YT.Player) createPlayer();
     } else {
-      mainTitle.textContent = "No videos found or Sheet is private.";
+      mainTitle.textContent = "No videos found.";
+      showError("EMPTY ERROR: Sheet found, but no valid rows (ID, Title, Duration) were found.");
     }
+
   } catch (error) {
-    console.error("Error fetching sheet:", error);
-    mainTitle.textContent = "Error loading playlist.";
-    statsDisplay.textContent = "Connection Failed";
+    console.error("Fetch error:", error);
+    showError("NETWORK ERROR: " + error.message);
   }
 }
 
-// 2. CSV Parser
+function showError(msg) {
+    errorBox.style.display = "block";
+    errorBox.textContent = msg;
+    mainTitle.textContent = "Error Loading";
+    statsMsg.textContent = "Failed";
+}
+
+// 2. CSV Parser (Robust Version)
 function parseCSV(csvText) {
   const lines = csvText.split('\n');
   const result = [];
   
-  // Start at i=1 to skip header
-  for (let i = 1; i < lines.length; i++) {
+  for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) continue;
     
-    // Simple regex to handle commas inside quotes
-    // If your titles have no commas, line.split(',') is faster
-    // This splits by comma BUT ignores commas inside "quotes"
-    const parts = line.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || line.split(',');
+    // Robust split: Handles "Title, with comma" correctly
+    const parts = line.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g);
+    if (!parts) continue;
 
-    // Clean up quotes from regex match
+    // Clean quotes
     const cleanParts = parts.map(p => p.replace(/^"|"$/g, '').trim());
 
-    if (cleanParts.length >= 3) {
-      // Assuming Order: ID, Title, Duration (Customize index if needed)
-      // If your CSV is: ID, Title, Description, Duration
-      // ID = 0, Title = 1, Duration = 3 (last)
-      
+    // Logic: Look for a Video ID (Usually col 1). Must be ~11 chars.
+    // If headers exist, row 1 might be "ID", "Title" -> Skip it.
+    
+    if (cleanParts.length >= 2) {
       const id = cleanParts[0]; 
-      // If title was split incorrectly due to complexity, fallback to simple logic
-      const title = cleanParts[1]; 
-      const duration = cleanParts[cleanParts.length - 1]; 
       
-      result.push({ id, title, duration });
+      // Skip Header Row if it says "ID" or "Video"
+      if(id.toLowerCase() === "id" || id.toLowerCase() === "video id") continue;
+
+      const title = cleanParts[1]; 
+      // Get Duration (Last column, or Col 3)
+      const duration = cleanParts.length > 2 ? cleanParts[cleanParts.length - 1] : "00:00";
+      
+      // Only add if ID looks real (not empty)
+      if(id.length > 5) {
+        result.push({ id, title, duration });
+      }
     }
   }
   return result;
 }
 
-// 3. Render and Setup
+// 3. UI Setup
 function setupUI() {
-  // Update Stats Text
-  statsDisplay.textContent = `${playlist.length} Lessons`;
-
   playlistContainer.innerHTML = playlist.map((v, i) => `
     <div class="video-item" data-index="${i}">
       <i class="fa-solid fa-play"></i>
@@ -197,8 +230,7 @@ function setupUI() {
   `).join('');
 
   videoItems = document.querySelectorAll('.video-item');
-
-  // Load Saved State
+  
   let savedIndex = parseInt(localStorage.getItem('lastVideoIndex')) || 0;
   if (savedIndex >= playlist.length) savedIndex = 0;
   currentIndex = savedIndex;
@@ -207,16 +239,13 @@ function setupUI() {
   videoItems.forEach((v, i) => v.addEventListener('click', () => playVideo(i)));
 }
 
-// 4. YouTube Player
+// 4. YouTube Logic
 function onYouTubeIframeAPIReady() {
-  if (playlist.length > 0) {
-    createPlayer();
-  }
+  if (playlist.length > 0) createPlayer();
 }
 
 function createPlayer() {
   if(player) return;
-  
   player = new YT.Player('player', {
     height: '100%',
     width: '100%',
@@ -226,7 +255,6 @@ function createPlayer() {
       'onReady': () => {
         player.seekTo(lastTime, true);
         highlightVideo(currentIndex);
-        // Browser policy might block auto-play with sound
         player.playVideo();
       },
       'onStateChange': onStateChange
@@ -236,32 +264,33 @@ function createPlayer() {
 
 function highlightVideo(index) {
   if(!videoItems.length) return;
-  
   videoItems.forEach(v => {
     v.classList.remove('active');
     v.querySelector('i').classList.replace('fa-pause', 'fa-play');
     v.querySelector('h3').style.color = "#000";
   });
-  
   if(videoItems[index]) {
     videoItems[index].classList.add('active');
     videoItems[index].querySelector('i').classList.replace('fa-play', 'fa-pause');
     videoItems[index].querySelector('h3').style.color = "var(--active-title)";
     mainTitle.textContent = playlist[index].title;
-    
     videoItems[index].scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 }
 
 function playVideo(index) {
   currentIndex = index;
-  if(player && player.loadVideoById) {
-    player.loadVideoById(playlist[index].id);
-  }
+  if(player && player.loadVideoById) player.loadVideoById(playlist[index].id);
   highlightVideo(index);
 }
 
-// Controls
+function onStateChange(event) {
+  if (event.data === YT.PlayerState.ENDED) {
+    currentIndex = (currentIndex + 1) % playlist.length;
+    playVideo(currentIndex);
+  }
+}
+
 nextBtn.addEventListener('click', () => {
   if(!playlist.length) return;
   currentIndex = (currentIndex + 1) % playlist.length;
@@ -274,7 +303,6 @@ prevBtn.addEventListener('click', () => {
   playVideo(currentIndex);
 });
 
-// Progress Loop
 setInterval(() => {
   if (player && player.getCurrentTime) {
     const time = player.getCurrentTime();
@@ -285,14 +313,6 @@ setInterval(() => {
   }
 }, 500);
 
-function onStateChange(event) {
-  if (event.data === YT.PlayerState.ENDED) {
-    currentIndex = (currentIndex + 1) % playlist.length;
-    playVideo(currentIndex);
-  }
-}
-
-initApp();
 </script>
 </body>
 </html>
