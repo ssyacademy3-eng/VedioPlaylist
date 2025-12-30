@@ -88,17 +88,19 @@ section{border-radius:10px;padding:1rem;flex:1;min-width:0;}
 <script src="https://www.youtube.com/iframe_api"></script>
 <script>
 // ==========================================
-// CONFIGURATION: TARGET SPECIFIC TABS
+// SMART CONFIGURATION (Dynamic Tab Selector)
 // ==========================================
 
-// 1. Enter the Sheet ID (From Browser URL)
-const sheetID = '1WjQgGPmH9H77ZCjQOT6CTDCw4wxnwu7OgMYNF04RVz8'; 
+const sheetID = '1vSsZgbYPEF4KHqPPUbpPEVjaw21doCq-Xz4v_l9yt0'; 
 
-// 2. Enter the GID (Tab ID) - Found at the end of the URL
-// '0' is usually the first tab. Look for 'gid=1234567' in your browser.
-const sheetGID = '0'; 
+// 1. Get the current URL parameters
+const urlParams = new URLSearchParams(window.location.search);
 
-// 3. Connection URL (Requests CSV format from the specific GID)
+// 2. Check if there is a "?gid=" number in the URL
+// If yes, use it. If no, default to '0' (the first tab).
+const sheetGID = urlParams.get('gid') || '0';
+
+// 3. Construct the URL automatically
 const sheetUrl = `https://docs.google.com/spreadsheets/d/${sheetID}/gviz/tq?tqx=out:csv&gid=${sheetGID}`;
 
 // ==========================================
