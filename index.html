@@ -3,16 +3,16 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>YouTube Playlist UI Dynamic</title>
+<title>YouTube Playlist UI</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 <style>
+/* --- SAME STYLING AS BEFORE --- */
 :root {
   --primary: linear-gradient(135deg,#0a0057,#3f00ee);
   --playlist-bg: #FFD700;
   --active-title: #0a0057;
   --progress: #3f00ee;
 }
-
 *{margin:0;padding:0;box-sizing:border-box;}
 body{width:100%;font-family:'Poppins',sans-serif;background:var(--primary);color:#000;overflow-x:hidden;}
 main.container{display:flex;flex-direction:row;gap:1rem;padding:1rem;max-width:1400px;margin:0 auto;}
@@ -41,21 +41,6 @@ section{border-radius:10px;padding:1rem;flex:1;min-width:0;}
 .videos::-webkit-scrollbar{width:4px;}
 .videos::-webkit-scrollbar-thumb{background:#000;border-radius:4px;}
 
-/* ERROR BOX STYLE */
-#errorBox {
-  display:none; 
-  background: #ffcccc; 
-  color: #cc0000; 
-  padding: 10px; 
-  border-radius: 5px; 
-  margin: 10px auto; 
-  max-width: 800px;
-  text-align: center;
-  font-weight: bold;
-  border: 2px solid #cc0000;
-}
-
-/* Responsive */
 @media(max-width:900px){
   main.container{flex-direction:column;padding:0.5rem;}
   .main-video{width:100%;}
@@ -79,8 +64,6 @@ section{border-radius:10px;padding:1rem;flex:1;min-width:0;}
 </head>
 <body>
 
-<div id="errorBox"></div>
-
 <main class="container">
   <section class="main-video">
     <div class="video-frame" id="videoFrameContainer">
@@ -97,7 +80,7 @@ section{border-radius:10px;padding:1rem;flex:1;min-width:0;}
 
   <section class="video-playlist">
     <h3 class="title">Lessons</h3>
-    <p id="statsMsg">Loading...</p>
+    <p id="statusMsg">Loading Playlist...</p>
     <div class="videos" id="playlistContainer"></div>
   </section>
 </main>
@@ -105,16 +88,17 @@ section{border-radius:10px;padding:1rem;flex:1;min-width:0;}
 <script src="https://www.youtube.com/iframe_api"></script>
 <script>
 // ==========================================
-// CONFIGURATION (EDIT HERE)
+// CONFIGURATION: TARGET SPECIFIC TABS
 // ==========================================
 
-// 1. SHEET ID (Find in URL: /d/XXXXXX/edit)
+// 1. Enter the Sheet ID (From Browser URL)
 const sheetID = '1WjQgGPmH9H77ZCjQOT6CTDCw4wxnwu7OgMYNF04RVz8'; 
 
-// 2. TAB ID / GID (Find in URL: gid=0 or gid=123456)
+// 2. Enter the GID (Tab ID) - Found at the end of the URL
+// '0' is usually the first tab. Look for 'gid=1234567' in your browser.
 const sheetGID = '0'; 
 
-// 3. Construct URL (Do not change this)
+// 3. Connection URL (Requests CSV format from the specific GID)
 const sheetUrl = `https://docs.google.com/spreadsheets/d/${sheetID}/gviz/tq?tqx=out:csv&gid=${sheetGID}`;
 
 // ==========================================
@@ -130,57 +114,40 @@ const mainTitle = document.getElementById('mainTitle');
 const progressBar = document.querySelector('.progress-bar');
 const nextBtn = document.getElementById('next');
 const prevBtn = document.getElementById('prev');
-const statsMsg = document.getElementById('statsMsg');
-const errorBox = document.getElementById('errorBox');
+const statusMsg = document.getElementById('statusMsg');
 
 // 1. Initialize App
-initApp();
-
 async function initApp() {
   try {
     const response = await fetch(sheetUrl);
+    if (!response.ok) throw new Error("Connection Failed.");
+    
     const data = await response.text();
     
-    // --- DEBUGGING CHECKS ---
-    
-    // Check 1: Did we get an HTML login page? (Means Private Sheet)
-    if(data.trim().startsWith("<!DOCTYPE") || data.includes("<html")) {
-        showError("PERMISSION ERROR: The Sheet is private. Go to Share > Anyone with the link.");
+    // Check if we got a Login Page (Private Sheet)
+    if(data.includes("<!DOCTYPE") || data.includes("<html")) {
+        mainTitle.textContent = "Error: Sheet is Private";
+        statusMsg.textContent = "Set 'Anyone with link'";
         return;
     }
 
-    // Check 2: Did we get a JSON error? (Means Wrong ID/GID)
-    if(data.includes("reqId") && data.includes("status")) {
-         showError("ID ERROR: Google cannot find this Sheet ID or GID. Check your URL.");
-         return;
-    }
-
-    // --- PARSING ---
     playlist = parseCSV(data);
     
     if (playlist.length > 0) {
-      statsMsg.textContent = `${playlist.length} Lessons`;
+      statusMsg.textContent = `${playlist.length} Lessons`;
       setupUI();
       if (window.YT && window.YT.Player) createPlayer();
     } else {
       mainTitle.textContent = "No videos found.";
-      showError("EMPTY ERROR: Sheet found, but no valid rows (ID, Title, Duration) were found.");
+      statusMsg.textContent = "Empty Sheet";
     }
-
   } catch (error) {
-    console.error("Fetch error:", error);
-    showError("NETWORK ERROR: " + error.message);
+    console.error(error);
+    mainTitle.textContent = "Connection Error";
   }
 }
 
-function showError(msg) {
-    errorBox.style.display = "block";
-    errorBox.textContent = msg;
-    mainTitle.textContent = "Error Loading";
-    statsMsg.textContent = "Failed";
-}
-
-// 2. CSV Parser (Robust Version)
+// 2. CSV Parser (Handles Quotes and Commas)
 function parseCSV(csvText) {
   const lines = csvText.split('\n');
   const result = [];
@@ -189,30 +156,24 @@ function parseCSV(csvText) {
     const line = lines[i].trim();
     if (!line) continue;
     
-    // Robust split: Handles "Title, with comma" correctly
+    // Split by comma but ignore commas inside quotes
     const parts = line.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g);
     if (!parts) continue;
 
-    // Clean quotes
     const cleanParts = parts.map(p => p.replace(/^"|"$/g, '').trim());
 
-    // Logic: Look for a Video ID (Usually col 1). Must be ~11 chars.
-    // If headers exist, row 1 might be "ID", "Title" -> Skip it.
-    
+    // We expect: ID, Title, Duration
     if (cleanParts.length >= 2) {
       const id = cleanParts[0]; 
       
-      // Skip Header Row if it says "ID" or "Video"
-      if(id.toLowerCase() === "id" || id.toLowerCase() === "video id") continue;
+      // Filter out header rows like "ID" or "Video"
+      if (id.toLowerCase() === "id" || id.length < 5) continue;
 
       const title = cleanParts[1]; 
-      // Get Duration (Last column, or Col 3)
+      // Get duration from 3rd col or last col
       const duration = cleanParts.length > 2 ? cleanParts[cleanParts.length - 1] : "00:00";
       
-      // Only add if ID looks real (not empty)
-      if(id.length > 5) {
-        result.push({ id, title, duration });
-      }
+      result.push({ id, title, duration });
     }
   }
   return result;
@@ -313,6 +274,7 @@ setInterval(() => {
   }
 }, 500);
 
+initApp();
 </script>
 </body>
 </html>
