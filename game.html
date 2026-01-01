@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>SSY Academy - Lesson Builder (Safe Mode)</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f0f2f5; padding: 20px; }
+        .card { border: none; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        .video-box { background: black; width: 100%; height: 360px; display: flex; align-items: center; justify-content: center; color: white; border-radius: 8px; overflow: hidden; }
+        .log-box { background: #eee; color: #555; font-family: monospace; padding: 5px; height: 100px; overflow-y: scroll; border-radius: 5px; font-size: 11px; margin-top: 5px; }
+        iframe { width: 100%; height: 100%; border: none; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2 class="text-center mb-4">🎵 SSY Lesson Builder (Safe Mode)</h2>
+
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card p-3">
+                <label class="fw-bold">1. YouTube Link</label>
+                <div class="input-group mb-2">
+                    <input type="text" id="urlInput" class="form-control" placeholder="Paste link..." value="https://youtu.be/WeMudFa1eE4">
+                    <button class="btn btn-primary" onclick="loadVideoSafe()">▶ Load Video</button>
+                </div>
+
+                <div id="playerPlaceholder" class="video-box">
+                    <span class="text-muted">Video will load here...</span>
+                </div>
+                
+                <div class="log-box" id="debugLog">System Ready.</div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card p-3">
+                <label class="fw-bold">2. Add Question</label>
+                
+                <div class="row mb-2">
+                    <div class="col-6">
+                        <button class="btn btn-warning w-100" onclick="getTimestamp()">⏱️ Get Time</button>
+                    </div>
+                    <div class="col-6">
+                        <input type="number" id="qTime" class="form-control" placeholder="Seconds (e.g. 12.5)">
+                    </div>
+                </div>
+
+                <input type="text" id="qText" class="form-control mb-2" placeholder="Sentence (e.g. Head shoulders ___ and toes)">
+                <input type="text" id="qAnswer" class="form-control mb-2" placeholder="Correct Answer (e.g. knees)">
+                
+                <select id="qMode" class="form-select mb-2" onchange="toggleMode()">
+                    <option value="mc">Buttons Mode</option>
+                    <option value="input">Typing Mode</option>
+                </select>
+
+                <div id="wrongOptionsBox">
+                    <input type="text" id="qWrong1" class="form-control mb-1" placeholder="Wrong Option 1">
+                    <input type="text" id="qWrong2" class="form-control mb-2" placeholder="Wrong Option 2">
+                </div>
+
+                <button class="btn btn-success w-100" onclick="saveQuestion()">➕ Add Question</button>
+                <hr>
+                <div class="d-grid">
+                    <button class="btn btn-dark" onclick="downloadGame()">🚀 Download Game File</button>
+                </div>
+                <div id="qCount" class="text-center mt-2 text-muted">Questions added: 0</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- VARIABLES ---
+    var player;
+    var currentVideoId = "";
+    var questions = [];
+    var isApiWorking = false; // Tracks if we are using API or Fallback
+
+    function log(msg) {
+        var box = document.getElementById('debugLog');
+        box.innerHTML = "> " + msg + "<br>" + box.innerHTML;
+    }
+
+    // --- 1. LOAD API ---
+    var tag = document.createElement('script');
+    tag.src = "https://www.youtube.com/iframe_api";
+    var firstScriptTag = document.getElementsByTagName('script')[0];
+    firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+    window.onYouTubeIframeAPIReady = function() {
+        log("YouTube System Ready.");
+    };
+
+    // --- 2. LOAD VIDEO LOGIC ---
+    function loadVideoSafe() {
+        var url = document.getElementById('urlInput').value.trim();
+        
+        // 1. Clean the URL (Remove ?si= and other garbage)
+        if(url.includes("?")) url = url.split("?")[0];
+        if(url.includes("&")) url = url.split("&")[0];
+
+        // 2. Extract ID
+        var vidId = "";
+        if(url.includes("youtu.be/")) vidId = url.split("youtu.be/")[1];
+        else if(url.includes("v=")) vidId = url.split("v=")[1];
+        
+        if (!vidId || vidId.length < 5) {
+            alert("Invalid Link. Please use a clean link like: https://youtu.be/ID");
+            return;
+        }
+
+        currentVideoId = vidId;
+        log("Loading ID: " + vidId);
+
+        // 3. Try API Player First
+        if (window.YT && window.YT.Player) {
+            try {
+                if(player) player.destroy(); // Clear old
+                document.getElementById('playerPlaceholder').innerHTML = '<div id="apiPlayer"></div>';
+                
+                player = new YT.Player('apiPlayer', {
+                    height: '100%',
+                    width: '100%',
+                    videoId: vidId,
+                    playerVars: { 'origin': window.location.origin, 'host': 'https://www.youtube.com' },
+                    events: {
+                        'onReady': function() { isApiWorking = true; log("API Player Active."); },
+                        'onError': function() { forceFallback(vidId); } // If error, switch to simple
+                    }
+                });
+            } catch(e) { forceFallback(vidId); }
+        } else {
+            forceFallback(vidId);
+        }
+    }
+
+    // --- 3. FALLBACK (SIMPLE PLAYER) ---
+    function forceFallback(vidId) {
+        isApiWorking = false;
+        log("⚠️ API Blocked by Browser. Switching to Simple Mode.");
+        // Just show a standard iframe. It ALWAYS works.
+        document.getElementById('playerPlaceholder').innerHTML = 
+            `<iframe src="https://www.youtube.com/embed/${vidId}" allowfullscreen></iframe>`;
+        
+        alert("Note: Because you are running this offline, 'Auto-Timestamp' is disabled. You must type the Seconds manually.");
+    }
+
+    // --- 4. GET TIME LOGIC ---
+    function getTimestamp() {
+        if (isApiWorking && player && player.getCurrentTime) {
+            // Auto Mode
+            var t = player.getCurrentTime();
+            document.getElementById('qTime').value = t.toFixed(1);
+            player.pauseVideo();
+        } else {
+            // Manual Mode
+            var manualTime = prompt("Look at the video time. Enter seconds (e.g. for 1:05 type 65):");
+            if(manualTime) document.getElementById('qTime').value = manualTime;
+        }
+    }
+
+    function toggleMode() {
+        var mode = document.getElementById('qMode').value;
+        document.getElementById('wrongOptionsBox').style.display = (mode === 'mc') ? 'block' : 'none';
+    }
+
+    function saveQuestion() {
+        var t = document.getElementById('qTime').value;
+        var txt = document.getElementById('qText').value;
+        var ans = document.getElementById('qAnswer').value;
+        var m = document.getElementById('qMode').value;
+        
+        if (!t || !txt || !ans) { alert("Please fill in Time, Sentence and Answer."); return; }
+
+        var q = { time: parseFloat(t), text: txt, answer: ans, mode: m, options: [] };
+        
+        if (m === 'mc') {
+            var w1 = document.getElementById('qWrong1').value;
+            var w2 = document.getElementById('qWrong2').value;
+            q.options = [ans, w1, w2].filter(Boolean);
+            if(q.options.length < 2) { alert("Add at least 1 wrong option"); return; }
+        }
+
+        questions.push(q);
+        log("Saved Question at " + t + "s");
+        document.getElementById('qCount').innerText = "Questions added: " + questions.length;
+        
+        // Clear inputs
+        document.getElementById('qText').value = "";
+        document.getElementById('qAnswer').value = "";
+        document.getElementById('qWrong1').value = "";
+        document.getElementById('qWrong2').value = "";
+    }
+
+    function downloadGame() {
+        if (questions.length === 0) { alert("Add questions first!"); return; }
+        
+        // THE GAME TEMPLATE
+        var template = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SSY English Game</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&family=Nunito:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root { --primary: #6c5ce7; --secondary: #fab1a0; --success: #00b894; --error: #d63031; --bg: #dfe6e9; }
+        body { font-family: 'Nunito', sans-serif; background-color: var(--bg); margin: 0; padding: 20px; text-align: center; }
+        .game-board { max-width: 800px; margin: 0 auto; background: white; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+        .header { background: var(--primary); color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center; }
+        .score-box { font-family: 'Fredoka', sans-serif; font-size: 20px; background: rgba(255,255,255,0.2); padding: 5px 15px; border-radius: 50px; }
+        .video-container { position: relative; padding-bottom: 56.25%; height: 0; background: black; }
+        .video-container iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        .game-area { padding: 30px 20px; min-height: 200px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        #lyrics-text { font-size: 26px; font-weight: 700; color: #2d3436; margin-bottom: 25px; line-height: 1.5; }
+        .gap { color: var(--primary); border-bottom: 3px solid var(--primary); padding: 0 10px; display: inline-block; min-width: 50px; }
+        .filled-correct { color: var(--success); border-bottom: 3px solid var(--success); }
+        .choices-grid { display: flex; gap: 15px; flex-wrap: wrap; justify-content: center; }
+        .choice-btn { background: white; border: 2px solid #b2bec3; padding: 12px 25px; font-size: 18px; border-radius: 12px; cursor: pointer; font-weight: bold; transition: all 0.2s; box-shadow: 0 4px 0 #b2bec3; }
+        .choice-btn:active { transform: translateY(4px); box-shadow: none; }
+        .choice-btn:hover { border-color: var(--primary); color: var(--primary); }
+        .type-input { padding: 10px 20px; font-size: 20px; border: 3px solid #b2bec3; border-radius: 10px; outline: none; text-align: center; width: 200px; }
+        .type-input:focus { border-color: var(--primary); }
+        .replay-btn { margin-top: 20px; background: #fdcb6e; border: none; padding: 8px 15px; border-radius: 50px; cursor: pointer; font-weight: bold; font-size: 14px; display: none; }
+        .correct-btn { background: var(--success) !important; color: white !important; border-color: var(--success) !important; box-shadow: 0 4px 0 #009476 !important; }
+        .wrong-btn { background: var(--error) !important; color: white !important; border-color: var(--error) !important; animation: shake 0.4s; }
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+    </style>
+</head>
+<body>
+<div class="game-board">
+    <div class="header"><div style="font-weight:bold;">SSY English Game</div><div class="score-box">💎 <span id="score">0</span></div></div>
+    <div class="video-container"><div id="player"></div></div>
+    <div class="game-area">
+        <div id="lyrics-text">Click Play to Start! ▶️</div>
+        <div id="interaction-area" class="choices-grid"></div>
+        <button id="replay-btn" class="replay-btn" onclick="replayLastLine()">↺ Replay Line</button>
+    </div>
+</div>
+<script>
+    const VIDEO_ID = "${currentVideoId}";
+    const LEVEL_DATA = ${JSON.stringify(questions)};
+    
+    var player, timer, currentQ = 0, isPaused = false, score = 0;
+    var tag = document.createElement('script'); tag.src = "https://www.youtube.com/iframe_api";
+    var firstScriptTag = document.getElementsByTagName('script')[0]; firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+    function onYouTubeIframeAPIReady() { player = new YT.Player('player', { videoId: VIDEO_ID, playerVars: { 'playsinline': 1, 'controls': 1, 'rel': 0 }, events: { 'onStateChange': onPlayerStateChange } }); }
+    function onPlayerStateChange(event) { if (event.data == YT.PlayerState.PLAYING) { document.getElementById('replay-btn').style.display = "block"; isPaused = false; timer = setInterval(checkGameLogic, 100); if(!isPaused) { document.getElementById('lyrics-text').innerHTML = "🎵 Listening..."; document.getElementById('interaction-area').innerHTML = ""; } } else { clearInterval(timer); } }
+    function checkGameLogic() { if (isPaused || currentQ >= LEVEL_DATA.length) return; let currentTime = player.getCurrentTime(); let q = LEVEL_DATA[currentQ]; if (currentTime >= q.time && currentTime < q.time + 0.5) { pauseForQuestion(q); } }
+    function pauseForQuestion(q) { isPaused = true; player.pauseVideo(); let gapHtml = q.text.replace("___", \`<span class="gap">_____</span>\`); document.getElementById('lyrics-text').innerHTML = gapHtml; let area = document.getElementById('interaction-area'); area.innerHTML = ""; if (q.mode === "mc") { let shuffled = q.options.sort(() => Math.random() - 0.5); shuffled.forEach(opt => { let btn = document.createElement('button'); btn.className = 'choice-btn'; btn.innerText = opt; btn.onclick = () => handleAnswer(opt, q.answer, btn); area.appendChild(btn); }); } else if (q.mode === "input") { let input = document.createElement('input'); input.className = 'type-input'; input.placeholder = "Type here..."; input.onkeypress = (e) => { if (e.key === 'Enter') handleAnswer(input.value, q.answer, input); }; area.appendChild(input); input.focus(); } }
+    function handleAnswer(userValue, correctValue, element) { if (userValue.trim().toLowerCase() === correctValue.toLowerCase()) { if(element.tagName === "BUTTON") element.classList.add('correct-btn'); else element.style.borderColor = "#00b894"; score += 10; document.getElementById('score').innerText = score; document.getElementById('lyrics-text').innerHTML = LEVEL_DATA[currentQ].text.replace("___", \`<span class="filled-correct">\${correctValue}</span>\`); setTimeout(() => { currentQ++; player.playVideo(); isPaused = false; }, 1000); } else { if(element.tagName === "BUTTON") element.classList.add('wrong-btn'); else { element.style.borderColor = "#d63031"; element.classList.add('wrong-btn'); setTimeout(() => element.classList.remove('wrong-btn'), 400); } } }
+    function replayLastLine() { let currentTime = player.getCurrentTime(); player.seekTo(currentTime - 3, true); player.playVideo(); }
+<\/script>
+</body>
+</html>`;
+
+        var blob = new Blob([template], {type: "text/html"});
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = "SSY_Game_Lesson.html";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    }
+</script>
+
+</body>
+</html>
