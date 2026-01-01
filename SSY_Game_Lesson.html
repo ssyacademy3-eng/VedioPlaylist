@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SSY English Game</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&family=Nunito:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root { --primary: #6c5ce7; --secondary: #fab1a0; --success: #00b894; --error: #d63031; --bg: #dfe6e9; }
+        body { font-family: 'Nunito', sans-serif; background-color: var(--bg); margin: 0; padding: 20px; text-align: center; }
+        .game-board { max-width: 800px; margin: 0 auto; background: white; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+        .header { background: var(--primary); color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center; }
+        .score-box { font-family: 'Fredoka', sans-serif; font-size: 20px; background: rgba(255,255,255,0.2); padding: 5px 15px; border-radius: 50px; }
+        .video-container { position: relative; padding-bottom: 56.25%; height: 0; background: black; }
+        .video-container iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        .game-area { padding: 30px 20px; min-height: 200px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        #lyrics-text { font-size: 26px; font-weight: 700; color: #2d3436; margin-bottom: 25px; line-height: 1.5; }
+        .gap { color: var(--primary); border-bottom: 3px solid var(--primary); padding: 0 10px; display: inline-block; min-width: 50px; }
+        .filled-correct { color: var(--success); border-bottom: 3px solid var(--success); }
+        .choices-grid { display: flex; gap: 15px; flex-wrap: wrap; justify-content: center; }
+        .choice-btn { background: white; border: 2px solid #b2bec3; padding: 12px 25px; font-size: 18px; border-radius: 12px; cursor: pointer; font-weight: bold; transition: all 0.2s; box-shadow: 0 4px 0 #b2bec3; }
+        .choice-btn:active { transform: translateY(4px); box-shadow: none; }
+        .choice-btn:hover { border-color: var(--primary); color: var(--primary); }
+        .type-input { padding: 10px 20px; font-size: 20px; border: 3px solid #b2bec3; border-radius: 10px; outline: none; text-align: center; width: 200px; }
+        .type-input:focus { border-color: var(--primary); }
+        .replay-btn { margin-top: 20px; background: #fdcb6e; border: none; padding: 8px 15px; border-radius: 50px; cursor: pointer; font-weight: bold; font-size: 14px; display: none; }
+        .correct-btn { background: var(--success) !important; color: white !important; border-color: var(--success) !important; box-shadow: 0 4px 0 #009476 !important; }
+        .wrong-btn { background: var(--error) !important; color: white !important; border-color: var(--error) !important; animation: shake 0.4s; }
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+    </style>
+</head>
+<body>
+<div class="game-board">
+    <div class="header"><div style="font-weight:bold;">SSY English Game</div><div class="score-box">💎 <span id="score">0</span></div></div>
+    <div class="video-container"><div id="player"></div></div>
+    <div class="game-area">
+        <div id="lyrics-text">Click Play to Start! ▶️</div>
+        <div id="interaction-area" class="choices-grid"></div>
+        <button id="replay-btn" class="replay-btn" onclick="replayLastLine()">↺ Replay Line</button>
+    </div>
+</div>
+<script>
+    const VIDEO_ID = "g0yaZ0IZcZI";
+    const LEVEL_DATA = [{"time":12.8,"text":"THE ...WIYT","answer":"Happy","mode":"mc","options":["Happy","Quiet","Bad"]}];
+    
+    var player, timer, currentQ = 0, isPaused = false, score = 0;
+    var tag = document.createElement('script'); tag.src = "https://www.youtube.com/iframe_api";
+    var firstScriptTag = document.getElementsByTagName('script')[0]; firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+    function onYouTubeIframeAPIReady() { player = new YT.Player('player', { videoId: VIDEO_ID, playerVars: { 'playsinline': 1, 'controls': 1, 'rel': 0 }, events: { 'onStateChange': onPlayerStateChange } }); }
+    function onPlayerStateChange(event) { if (event.data == YT.PlayerState.PLAYING) { document.getElementById('replay-btn').style.display = "block"; isPaused = false; timer = setInterval(checkGameLogic, 100); if(!isPaused) { document.getElementById('lyrics-text').innerHTML = "🎵 Listening..."; document.getElementById('interaction-area').innerHTML = ""; } } else { clearInterval(timer); } }
+    function checkGameLogic() { if (isPaused || currentQ >= LEVEL_DATA.length) return; let currentTime = player.getCurrentTime(); let q = LEVEL_DATA[currentQ]; if (currentTime >= q.time && currentTime < q.time + 0.5) { pauseForQuestion(q); } }
+    function pauseForQuestion(q) { isPaused = true; player.pauseVideo(); let gapHtml = q.text.replace("___", `<span class="gap">_____</span>`); document.getElementById('lyrics-text').innerHTML = gapHtml; let area = document.getElementById('interaction-area'); area.innerHTML = ""; if (q.mode === "mc") { let shuffled = q.options.sort(() => Math.random() - 0.5); shuffled.forEach(opt => { let btn = document.createElement('button'); btn.className = 'choice-btn'; btn.innerText = opt; btn.onclick = () => handleAnswer(opt, q.answer, btn); area.appendChild(btn); }); } else if (q.mode === "input") { let input = document.createElement('input'); input.className = 'type-input'; input.placeholder = "Type here..."; input.onkeypress = (e) => { if (e.key === 'Enter') handleAnswer(input.value, q.answer, input); }; area.appendChild(input); input.focus(); } }
+    function handleAnswer(userValue, correctValue, element) { if (userValue.trim().toLowerCase() === correctValue.toLowerCase()) { if(element.tagName === "BUTTON") element.classList.add('correct-btn'); else element.style.borderColor = "#00b894"; score += 10; document.getElementById('score').innerText = score; document.getElementById('lyrics-text').innerHTML = LEVEL_DATA[currentQ].text.replace("___", `<span class="filled-correct">${correctValue}</span>`); setTimeout(() => { currentQ++; player.playVideo(); isPaused = false; }, 1000); } else { if(element.tagName === "BUTTON") element.classList.add('wrong-btn'); else { element.style.borderColor = "#d63031"; element.classList.add('wrong-btn'); setTimeout(() => element.classList.remove('wrong-btn'), 400); } } }
+    function replayLastLine() { let currentTime = player.getCurrentTime(); player.seekTo(currentTime - 3, true); player.playVideo(); }
+</script>
+</body>
+</html>
