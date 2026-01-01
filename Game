@@ -1,0 +1,256 @@
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>SSY Lesson Builder (Diagnostic Mode)</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f0f2f5; padding: 20px; }
+        .video-box { background: black; width: 100%; height: 360px; display: flex; align-items: center; justify-content: center; color: white; border-radius: 8px; overflow: hidden; }
+        .log-box { background: #333; color: #0f0; font-family: monospace; padding: 10px; height: 150px; overflow-y: scroll; border-radius: 5px; font-size: 12px; margin-top: 10px; }
+        iframe { width: 100%; height: 100%; border: none; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2 class="text-center mb-4">🛠️ SSY Dashboard (Fixed)</h2>
+
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card p-3">
+                <label class="fw-bold">1. YouTube Link</label>
+                <div class="input-group mb-2">
+                    <input type="text" id="urlInput" class="form-control" placeholder="Paste link here..." value="https://youtu.be/WeMudFa1eE4?si=l4ssp46sKKSsKls0">
+                    <button class="btn btn-primary" onclick="startPlayer()">▶ Load Video</button>
+                </div>
+
+                <div id="playerPlaceholder" class="video-box">
+                    <span>Video Player will load here...</span>
+                </div>
+
+                <div class="log-box" id="debugLog">System Init...<br></div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card p-3">
+                <label class="fw-bold">2. Add Question</label>
+                
+                <div class="row mb-2">
+                    <div class="col-6">
+                        <button class="btn btn-warning w-100" onclick="getTimestamp()">⏱️ Get Time</button>
+                    </div>
+                    <div class="col-6">
+                        <input type="number" id="qTime" class="form-control" placeholder="Seconds" readonly>
+                    </div>
+                </div>
+
+                <input type="text" id="qText" class="form-control mb-2" placeholder="Sentence (e.g. I know you ___)">
+                <input type="text" id="qAnswer" class="form-control mb-2" placeholder="Correct Answer">
+                
+                <select id="qMode" class="form-select mb-2">
+                    <option value="mc">Buttons Mode</option>
+                    <option value="input">Typing Mode</option>
+                </select>
+
+                <input type="text" id="qWrong1" class="form-control mb-1" placeholder="Wrong Option 1">
+                <input type="text" id="qWrong2" class="form-control mb-2" placeholder="Wrong Option 2">
+
+                <button class="btn btn-success w-100" onclick="saveQuestion()">➕ Add Question</button>
+                <hr>
+                <div class="d-grid">
+                    <button class="btn btn-dark" onclick="downloadGame()">🚀 Download Game File</button>
+                </div>
+                <div id="qCount" class="text-center mt-2 text-muted">Questions added: 0</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- VARIABLES ---
+    var player;
+    var currentVideoId = "";
+    var questions = [];
+    var isAPILoaded = false;
+
+    // --- LOGGING FUNCTION ---
+    function log(msg) {
+        var box = document.getElementById('debugLog');
+        box.innerHTML += "> " + msg + "<br>";
+        box.scrollTop = box.scrollHeight;
+    }
+
+    // --- 1. LOAD YOUTUBE API MANUALLY ---
+    log("Loading YouTube API...");
+    var tag = document.createElement('script');
+    tag.src = "https://www.youtube.com/iframe_api";
+    var firstScriptTag = document.getElementsByTagName('script')[0];
+    firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+    // This function runs when YouTube is ready
+    window.onYouTubeIframeAPIReady = function() {
+        isAPILoaded = true;
+        log("✅ API SUCCESS: YouTube System is Ready.");
+    };
+
+    // --- 2. EXTRACT ID & START PLAYER ---
+    function startPlayer() {
+        if (!isAPILoaded) {
+            log("⚠️ WAITING: API not ready yet. Retrying in 1 second...");
+            setTimeout(startPlayer, 1000);
+            return;
+        }
+
+        var url = document.getElementById('urlInput').value;
+        var vidId = extractVideoID(url);
+
+        if (!vidId) {
+            log("❌ ERROR: Could not find Video ID. Check link.");
+            alert("Invalid Link");
+            return;
+        }
+
+        currentVideoId = vidId;
+        log("🔍 FOUND ID: " + vidId);
+
+        // Destroy old player if exists
+        if (player) {
+            player.destroy();
+            log("Refreshed Player.");
+        }
+
+        // Create new player inside the 'playerPlaceholder' div
+        // We replace the DIV with the IFRAME
+        log("▶ Creating Player...");
+        
+        // Use a temporary div ID for the player to attach to
+        document.getElementById('playerPlaceholder').innerHTML = '<div id="actualPlayer"></div>';
+
+        player = new YT.Player('actualPlayer', {
+            height: '100%',
+            width: '100%',
+            videoId: vidId,
+            events: {
+                'onReady': onPlayerReady,
+                'onError': onPlayerError
+            }
+        });
+    }
+
+    // Robust ID Extractor
+    function extractVideoID(url) {
+        var regExp = /^.*((youtu.be\/)|(v\/)|(\/u\/\w\/)|(embed\/)|(watch\?))\??v?=?([^#&?]*).*/;
+        var match = url.match(regExp);
+        return (match && match[7].length == 11) ? match[7] : false;
+    }
+
+    function onPlayerReady(event) {
+        log("✅ PLAYER READY: You can play the video.");
+        event.target.playVideo();
+    }
+
+    function onPlayerError(event) {
+        log("❌ PLAYER ERROR CODE: " + event.data);
+    }
+
+    // --- 3. DASHBOARD LOGIC ---
+    function getTimestamp() {
+        if (player && player.getCurrentTime) {
+            var t = player.getCurrentTime();
+            document.getElementById('qTime').value = t.toFixed(1);
+            player.pauseVideo();
+            log("Captured Time: " + t.toFixed(1));
+        } else {
+            log("⚠️ Player not active.");
+        }
+    }
+
+    function saveQuestion() {
+        var t = document.getElementById('qTime').value;
+        var txt = document.getElementById('qText').value;
+        var ans = document.getElementById('qAnswer').value;
+        var m = document.getElementById('qMode').value;
+        
+        if (!t || !txt || !ans) { alert("Missing fields!"); return; }
+
+        var q = { time: parseFloat(t), text: txt, answer: ans, mode: m, options: [] };
+        
+        if (m === 'mc') {
+            var w1 = document.getElementById('qWrong1').value;
+            var w2 = document.getElementById('qWrong2').value;
+            if(!w1) { alert("Add at least 1 wrong option"); return; }
+            q.options = [ans, w1, w2].filter(Boolean); // Remove empty
+        }
+
+        questions.push(q);
+        log("Saved Question at " + t + "s");
+        document.getElementById('qCount').innerText = "Questions added: " + questions.length;
+        
+        // Clear inputs
+        document.getElementById('qText').value = "";
+        document.getElementById('qAnswer').value = "";
+    }
+
+    function downloadGame() {
+        if (questions.length === 0) { alert("Add questions first!"); return; }
+        
+        // THE TEMPLATE
+        var template = `
+<!DOCTYPE html>
+<html>
+<head>
+<title>SSY Game</title>
+<style>
+body{font-family:sans-serif;text-align:center;background:#f4f4f4;padding:20px}
+.box{max-width:800px;margin:auto;background:white;padding:20px;border-radius:10px;box-shadow:0 5px 15px rgba(0,0,0,0.1)}
+#vid{height:400px;background:black;margin-bottom:20px}iframe{width:100%;height:100%}
+.btn{padding:10px 20px;margin:5px;font-size:18px;cursor:pointer;background:#fff;border:2px solid #ccc;border-radius:8px}
+.btn:hover{background:#eee}.correct{background:#4CAF50!important;color:#fff}.wrong{background:#f44336!important;color:#fff}
+input{padding:10px;font-size:18px;text-align:center;border:2px solid #ccc;border-radius:8px}
+#txt{font-size:24px;font-weight:bold;margin:20px}.gap{color:#6c5ce7;border-bottom:3px solid #6c5ce7}
+</style>
+</head>
+<body>
+<div class="box">
+    <h2>🎵 English Practice</h2>
+    <div id="vid"><div id="player"></div></div>
+    <div id="txt">Press Play ▶</div>
+    <div id="opts"></div>
+    <h3 id="score">Score: 0</h3>
+</div>
+<script>
+var data = ${JSON.stringify(questions)};
+var vidId = "${currentVideoId}";
+var p, t, curr=0, sc=0;
+var tag=document.createElement('script');tag.src="https://www.youtube.com/iframe_api";
+document.head.appendChild(tag);
+function onYouTubeIframeAPIReady(){p=new YT.Player('player',{videoId:vidId,events:{'onStateChange':onS}});}
+function onS(e){if(e.data==1){t=setInterval(chk,100);document.getElementById('txt').innerHTML="Listening...";document.getElementById('opts').innerHTML=""}else{clearInterval(t)}}
+function chk(){if(curr>=data.length)return;var tm=p.getCurrentTime();if(tm>=data[curr].time){pause(data[curr])}}
+function pause(q){p.pauseVideo();document.getElementById('txt').innerHTML=q.text.replace("___","<span class='gap'>___</span>");
+var h="";if(q.mode=="mc"){q.options.sort(()=>Math.random()-.5).forEach(o=>{h+='<button class="btn" onclick="ans(this,\''+o+'\',\''+q.answer+'\')">'+o+'</button>'})}
+else{h='<input id="inp" onchange="ans(this,this.value,\''+q.answer+'\')">'}
+document.getElementById('opts').innerHTML=h;}
+function ans(el,val,cor){if(val.toLowerCase().trim()==cor.toLowerCase()){
+el.classList?el.classList.add("correct"):el.style.borderColor="green";sc+=10;document.getElementById('score').innerText="Score: "+sc;
+document.getElementById('txt').innerHTML=data[curr].text.replace("___",cor);
+setTimeout(()=>{curr++;p.playVideo()},1000)}else{
+el.classList?el.classList.add("wrong"):el.style.borderColor="red";}}
+<\/script></body></html>`;
+
+        var blob = new Blob([template], {type: "text/html"});
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = "SSY_Game_Lesson.html";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    }
+</script>
+
+</body>
+</html>
